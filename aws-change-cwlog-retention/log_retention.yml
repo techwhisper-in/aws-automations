@@ -1,0 +1,415 @@
+Description: Deploys an Lambda role and lambda which changes retention period of loggroups
+Parameters:
+  EnvName:
+    Description: Select the environment
+    Type: String
+    MaxLength: 41
+    AllowedValues:
+      - prmon1
+      - prdp1
+      - rsci1
+      - nsci1
+      - prsa1
+      - prev1
+      - pvsa1
+      - pvdp1
+      - acmon1
+      - acpt1
+      - acpt2
+      - acdp1
+      - acdp2
+      - acsa1
+      - acsa2
+      - dvmon1
+      - dev1
+      - dev2
+      - dev3
+      - dvdp1
+      - dvdp2
+      - dvdp3
+      - dvsa1
+      - dvsa2
+      - dvsa3
+      - dvmd1
+      - tsmon1
+      - test1
+      - test2
+      - tsdp1
+      - tsdp2
+      - tsin1
+      - tssa1
+      - tssa2
+      - npsa1
+  EnvType:
+    Description: Select the type of environment
+    Type: String
+    MaxLength: 41
+    AllowedValues:
+      - production
+      - non-production
+  BucketName:
+    Description: S3 Bucket Name which stores code
+    Type: String
+    MinLength: 6
+    AllowedPattern: '^[/a-zA-Z0-9_\-\.:]*$'
+  SNSTopic:
+    Description: ARN of SNS topic for notification
+    Type: String
+    MinLength: 6
+    AllowedPattern: '^[/a-zA-Z0-9_\-\.:]*$'
+Conditions:
+  EnvsourceSelectCondition: !Or 
+    - !Equals 
+      - !Ref EnvName
+      - acmon1
+    - !Equals 
+      - !Ref EnvName
+      - prmon1
+  EnvtargetSelectCondition: !Not 
+    - !Or 
+      - !Equals 
+        - !Ref EnvName
+        - prmon1
+      - !Equals 
+        - !Ref EnvName
+        - acmon1
+Mappings:
+  AssumeRoleCondition:
+    production:
+      AssumeCondition:
+        - prmon1
+        - prdp1
+        - rsci1
+        - nsci1
+        - prsa1
+        - prev1
+        - pvsa1
+        - pvdp1
+    non-production:
+      AssumeCondition:
+        - acmon1
+        - acpt1
+        - acpt2
+        - acdp1
+        - acdp2
+        - acsa1
+        - acsa2
+        - dvmon1
+        - dev1
+        - dev2
+        - dev3
+        - dvdp1
+        - dvdp2
+        - dvdp3
+        - dvsa1
+        - dvsa2
+        - dvsa3
+        - dvmd1
+        - tsmon1
+        - test1
+        - test2
+        - tsdp1
+        - tsdp2
+        - tsin1
+        - tssa1
+        - tssa2
+        - npsa1
+  region:
+    ap-south-1:
+      reg: ap1
+    us-east-1:
+      reg: e1
+    us-east-2:
+      reg: e2
+  Controllers:
+    production:
+      ControllerAccId: '590183834329'
+      ControllerAccName: prmon1
+      RetentionPeriod: 30
+    non-production:
+      ControllerAccId: '590183834329'
+      ControllerAccName: acmon1
+      RetentionPeriod: 7
+Resources:
+  techwhispersourcelambda:
+    Condition: EnvsourceSelectCondition
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+        Version: 2012-10-17
+      Description: IAM role for Lambda to fetch Log groups
+      RoleName: !Join 
+        - '-'
+        - - techwhisper
+          - role-change-cwlog-retention
+          - !Ref EnvName
+          - !FindInMap 
+            - region
+            - !Ref 'AWS::Region'
+            - reg
+      Tags:
+        - Key: Name
+          Value: !Join 
+            - '-'
+            - - techwhisper
+              - role-change-cwlog-retention
+              - !Ref EnvName
+              - !FindInMap 
+                - region
+                - !Ref 'AWS::Region'
+                - reg
+        - Key: environment
+          Value: !Ref EnvName
+        - Key: costcenter
+          Value: '157'
+        - Key: lob
+          Value: development
+        - Key: createdby
+          Value: cloudformation
+  techwhispertargetlambda:
+    Condition: EnvtargetSelectCondition
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              AWS: !Join 
+                - ''
+                - - 'arn:aws:iam::'
+                  - !FindInMap 
+                    - Controllers
+                    - !Ref EnvType
+                    - ControllerAccId
+                  - ':root'
+            Condition:
+              StringEquals:
+                'aws:PrincipalArn': !Join 
+                  - ''
+                  - - 'arn:aws:iam::'
+                    - !FindInMap 
+                      - Controllers
+                      - !Ref EnvType
+                      - ControllerAccId
+                    - ':role/techwhisper-role-change-cwlog-retention-'
+                    - !FindInMap 
+                      - Controllers
+                      - !Ref EnvType
+                      - ControllerAccName
+                    - '-'
+                    - !FindInMap 
+                      - region
+                      - !Ref 'AWS::Region'
+                      - reg
+        Version: 2012-10-17
+      Description: IAM role for Lambda to fetch Loggroup
+      RoleName: !Join 
+        - '-'
+        - - techwhisper
+          - role-change-cwlog-retention
+          - !Ref EnvName
+          - !FindInMap 
+            - region
+            - !Ref 'AWS::Region'
+            - reg
+      Tags:
+        - Key: Name
+          Value: !Join 
+            - '-'
+            - - techwhisper
+              - role-change-cwlog-retention
+              - !Ref EnvName
+              - !FindInMap 
+                - region
+                - !Ref 'AWS::Region'
+                - reg
+        - Key: environment
+          Value: !Ref EnvName
+        - Key: costcenter
+          Value: '157'
+        - Key: lob
+          Value: development
+        - Key: createdby
+          Value: cloudformation
+  CWLogPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCW1Access
+            Action:
+              - 'logs:DescribeLogGroups'
+              - 'logs:ListTagsForResource'
+              - 'logs:ListTagsLogGroup'
+              - 'logs:PutRetentionPolicy'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:*'
+          - Sid: AllowCW2Access
+            Action:
+              - 'logs:PutLogEvents'
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+            Effect: Allow
+            Resource: !Sub >-
+              arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/techwhisper-func-change-cwlog-retention*
+        Version: 2012-10-17
+      PolicyName: !Join 
+        - '-'
+        - - techwhisper
+          - policy-access-cwlog
+          - !Ref EnvName
+          - !FindInMap 
+            - region
+            - !Ref 'AWS::Region'
+            - reg
+      Roles:
+        - !Ref techwhispersourcelambda
+  CWLogPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 'logs:DescribeLogGroups'
+              - 'logs:ListTagsForResource'
+              - 'logs:ListTagsLogGroup'
+              - 'logs:PutRetentionPolicy'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:*'
+            Sid: AllowLogGroupAccess
+        Version: 2012-10-17
+      PolicyName: !Join 
+        - '-'
+        - - techwhisper
+          - policy-access-cwlog
+          - !Ref EnvName
+          - !FindInMap 
+            - region
+            - !Ref 'AWS::Region'
+            - reg
+      Roles:
+        - !Ref techwhispertargetlambda
+  snsPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 'sns:publish'
+              - 'sns:subscription'
+            Effect: Allow
+            Resource: !Ref SNSTopic
+            Sid: AllowsnsAccess
+        Version: 2012-10-17
+      PolicyName: !Join 
+        - '-'
+        - - techwhisper
+          - policy-access-sns
+          - !Ref EnvName
+          - !FindInMap 
+            - region
+            - !Ref 'AWS::Region'
+            - reg
+      Roles:
+        - !Ref techwhispersourcelambda
+  crosslambdaPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Resource:
+              - 'arn:aws:iam::*:role/techwhisper-role-change-cwlog-retention*'
+            Condition:
+              StringEquals:
+                'aws:ResourceTag/environment': !FindInMap 
+                  - AssumeRoleCondition
+                  - !Ref EnvType
+                  - AssumeCondition
+            Sid: AllowCrossAccountAccess
+        Version: 2012-10-17
+      PolicyName: !Join 
+        - '-'
+        - - techwhisper
+          - policy-access-crossaccount
+          - !Ref EnvName
+          - !FindInMap 
+            - region
+            - !Ref 'AWS::Region'
+            - reg
+      Roles:
+        - !Ref techwhispersourcelambda
+  LambdaChangeCWRetention:
+    Condition: EnvsourceSelectCondition
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      FunctionName: !Join 
+        - '-'
+        - - techwhisper
+          - func-change-cwlog-retention
+          - !Ref EnvName
+          - !FindInMap 
+            - region
+            - !Ref 'AWS::Region'
+            - reg
+      Role: !GetAtt techwhispersourcelambda.Arn
+      Runtime: python3.11
+      Timeout: '900'
+      Code:
+        S3Bucket: !Ref BucketName
+        S3Key: change_log_retention.zip
+      Environment:
+        Variables:
+          execution_role: !GetAtt techwhispersourcelambda.Arn
+          sns_topic: !Ref SNSTopic
+          retention: !FindInMap 
+            - Controllers
+            - !Ref EnvType
+            - RetentionPeriod
+      Tags:
+        - Key: Name
+          Value: !Join 
+            - '-'
+            - - techwhisper
+              - func-change-cwlog-retention
+              - !Ref EnvName
+              - !FindInMap 
+                - region
+                - !Ref 'AWS::Region'
+                - reg
+        - Key: applicationrole
+          Value: change-cwlog-retention
+        - Key: costcenter
+          Value: 157
+        - Key: lob
+          Value: infra
+        - Key: createdby
+          Value: cloudformation
+  LambdaAsycConfig:
+    Condition: EnvsourceSelectCondition
+    Type: 'AWS::Lambda::EventInvokeConfig'
+    Properties:
+      DestinationConfig:
+        OnFailure:
+          Destination: !Ref SNSTopic
+        OnSuccess:
+          Destination: !Ref SNSTopic
+      FunctionName: !Ref LambdaChangeCWRetention
+      MaximumRetryAttempts: 1
+      Qualifier: $LATEST

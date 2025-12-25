@@ -1,0 +1,565 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Deploys architecture for ES index snapshot and restoration using Lambda function
+Parameters:
+  EnvName:
+    Description: Environment name where lambda being deployed
+    Type: String
+    MinLength: 1
+    MaxLength: 80
+    AllowedPattern: '^[/a-zA-Z0-9_\-\.:]*$'
+
+  SnapshotRetention:
+    Description: Retention period of Index snapshot in Days
+    Type: String
+    MinLength: 1
+    MaxLength: 3
+    AllowedPattern: '^[/a-zA-Z0-9_\-\.:]*$'
+
+  S3KMSKey:
+    Description: KMS Key for S3 Bucket
+    Type: String
+    MinLength: 6
+    MaxLength: 80
+    AllowedPattern: '^[/a-zA-Z0-9_\-\.:]*$'
+
+  BucketName:
+    Description: S3 Bucket Name which stores code
+    Type: String
+    MinLength: 6
+    MaxLength: 80
+    AllowedPattern: '^[/a-zA-Z0-9_\-\.:]*$'
+
+  JAMSTriggerIAM:
+    Description: ARN of IAM role attached to JAMS
+    Type: String
+    MinLength: 6
+    MaxLength: 80
+    AllowedPattern: '^[/a-zA-Z0-9_\-\.:]*$'
+ 
+Mappings:
+  region:
+    us-east-1:
+      reg: >-
+        e1
+    us-east-2:
+      reg: >-
+        e2
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Join ["-", [techwhisper-opensearch-backup, !Ref EnvName, !FindInMap [region, !Ref AWS::Region, reg]]]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Ref S3KMSKey
+              SSEAlgorithm: aws:kms
+      Tags:
+        - Key: Name
+          Value: !Join ["-", [techwhisper-opensearch-backup, !Ref EnvName, !FindInMap [region, !Ref AWS::Region, reg]]]
+        - Key: description
+          Value: "s3 bucket for ES Snapshot"
+        - Key: environment
+          Value: !Ref EnvName
+        - Key: applicationrole
+          Value: storage
+        - Key: createdby
+          Value: cloudformation
+        - Key: application
+          Value: shared
+
+      MetricsConfigurations:
+        - Id: EntireBucket
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Suspended
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        !Ref S3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Sid: "Deny Http request"
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - 's3:*'
+            Resource:
+              - !Join [ "", [ "arn:aws:s3:::techwhisper-opensearch-backup-", !Ref EnvName, "-", !FindInMap [region, !Ref AWS::Region, reg], "/*"]]
+              - !Join [ "", [ "arn:aws:s3:::techwhisper-opensearch-backup-", !Ref EnvName, "-", !FindInMap [region, !Ref AWS::Region, reg]]]
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties: 
+      DisplayName: !Join ["-", [techwhisper-elasticsearch-backup-successful-notification, !Ref EnvName, !FindInMap [region, !Ref AWS::Region, reg]]]
+      KmsMasterKeyId: alias/aws/sns
+      Subscription:
+        - Endpoint: abc@gmail.com
+          Protocol: Email
+        - Endpoint: abc@techwhisper.com
+          Protocol: Email
+      Tags: 
+        - Key: Name
+          Value: !Join ["-", [techwhisper-elasticsearch-backup-successful-notification, !Ref EnvName, !FindInMap [region, !Ref AWS::Region, reg]]]
+        - Key: applicationrole
+          Value: notification
+        - Key: createdby
+          Value: cloudformation
+      TopicName: !Join ["-", [techwhisper-elasticsearch-backup-successful-notification, !Ref EnvName, !FindInMap [region, !Ref AWS::Region, reg]]]
+  SSMRepository:
+    Type: AWS::SSM::Parameter
+    Properties:
+      DataType: text
+      Description: It stores Repository name for ES backup
+      Name: !Join ["", ["/techwhisper-param/shared/datalake/esdomain/", !Ref EnvName, "/opensearchbackuprepository"]]
+      Tier: Standard
+      Type: String
+      Value: !Join ["-", ["techwhisper-es-domain", !Ref EnvName, "backups"]]
+
+  SSMRetention:
+    Type: AWS::SSM::Parameter
+    Properties:
+      DataType: text
+      Description: It stores retention period for ES backup
+      Name: !Join ["", ["/techwhisper-param/shared/datalake/esdomain/", !Ref EnvName, "/essnapshotretention"]]
+      Tier: Standard
+      Type: String
+      Value: !Ref SnapshotRetention
+      
+#####################------------------Lambda Layer--------------------------###########################
+  lambdalayers1:
+    Type: AWS::Lambda::LayerVersion
+    Properties: 
+      CompatibleArchitectures: 
+        - x86_64
+      CompatibleRuntimes: 
+        - python3.9
+      Content: 
+        S3Bucket: !Ref BucketName
+        S3Key: request_aws4auth_layer.zip
+      Description: Lambda layer for python module request_aws4auth_layer
+      LayerName: request_aws4auth_layer
+  lambdalayers2:
+    Type: AWS::Lambda::LayerVersion
+    Properties: 
+      CompatibleArchitectures: 
+        - x86_64
+      CompatibleRuntimes: 
+        - python3.9
+      Content: 
+        S3Bucket: !Ref BucketName
+        S3Key: request_layer.zip
+      Description: Lambda layer for python module request_layer
+      LayerName: request_layer
+#####################------------------Lambda Layer-END-------------------------###########################
+
+####################----------------------- Roles & Policies -----------------#################################
+  techwhisperroleLambda:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - 'es.amazonaws.com'
+                - 'lambda.amazonaws.com'
+        Version: 2012-10-17
+      Description: IAM role for Lambda to access es domain
+      RoleName: !Join 
+        - '-'
+        - - techwhisper
+          - access-es-domain
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Tags:
+        - Key: name
+          Value: !Join 
+            - ''
+            - - techwhisper
+              - '-access-es-domain-'
+              - !Ref EnvName
+              - !FindInMap [region, !Ref AWS::Region, reg]
+        - Key: environment
+          Value: !Ref EnvName
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  ESPolicysource:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:  
+              - 'es:ESHttpHead'
+              - 'es:ESHttpPost'
+              - 'es:ESHttpGet'
+              - 'es:ESHttpDelete'
+              - 'es:ESHttpPut'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:es:*:${AWS::AccountId}:domain/*'
+          - Action:          
+              - 'iam:PassRole'
+            Effect: Allow
+            Resource:  !Join 
+            - '-'
+            - - !Sub arn:aws:iam::${AWS::AccountId}:role/techwhisper
+              - access-es-domain
+              - !Ref EnvName
+              - !FindInMap [region, !Ref AWS::Region, reg]
+        Version: 2012-10-17
+      PolicyName: !Join 
+        - '-'
+        - - techwhisper
+          - Lambda-ES-iampolicy
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref techwhisperroleLambda
+  CWPolicysource:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Sid: AllowsnsAccess
+            Action:
+              - 'logs:CreateLogStream'
+              - 'logs:CreateLogGroup'
+              - 'logs:PutLogEvents'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:*'
+        Version: 2012-10-17
+      PolicyName: !Join 
+        - '-'
+        - - techwhisper
+          - Lambda-cloudwatchlogs-iampolicy
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref techwhisperroleLambda
+  eventPolicysource:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 'event:*'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:events:*:${AWS::AccountId}:rule/*'
+            Sid: AllowsnsAccess
+        Version: 2012-10-17
+      PolicyName: !Join 
+        - '-'
+        - - techwhisper
+          - Lambda-cloudwatchevent-iampolicy
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref techwhisperroleLambda
+  ssmPolicysource:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 'ssm:GetParameter'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:ssm:*:${AWS::AccountId}:parameter/*'
+            Sid: AllowsnsAccess
+        Version: 2012-10-17
+      PolicyName: !Join 
+        - '-'
+        - - techwhisper
+          - Lambda-ssm-iampolicy
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref techwhisperroleLambda
+  snsPolicysource:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 'sns:publish'
+              - 'sns:subscription'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:sns:*:${AWS::AccountId}:*'
+            Sid: AllowsnsAccess
+        Version: 2012-10-17
+      PolicyName: !Join 
+        - '-'
+        - - techwhisper
+          - Lambda-sns-iampolicy
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref techwhisperroleLambda
+  s3Policysource:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+              - 's3:ListBucket'
+            Effect: Allow
+            Resource: !Join [ "", [ "arn:aws:s3:::techwhisper-opensearch-backup-", !Ref EnvName, "-", !FindInMap [region, !Ref AWS::Region, reg], "*"]]
+            Sid: AllowsnsAccess
+        Version: 2012-10-17
+      PolicyName: !Join
+        - '-'
+        - - techwhisper
+          - lambda-s3-iampolicy
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref techwhisperroleLambda
+  kmsPolicysource:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 'kms:ListAliases'
+            Effect: Allow
+            Resource: !Ref S3KMSKey
+            Sid: AllowsnsAccess
+        Version: 2012-10-17
+      PolicyName: !Join 
+        - '-'
+        - - techwhisper
+          - lambda-kms-iampolicy
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref techwhisperroleLambda
+  kmsDecriptPolicysource:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Effect: Allow
+            Resource: !Ref S3KMSKey
+            Sid: AllowDecriptAccess
+        Version: 2012-10-17
+      PolicyName: techwhisper_KMSDecryptRights
+      Roles:
+        - !Ref techwhisperroleLambda
+###################---------------------Role-END---------------------------------------------#######################
+###########------------------------- Create Lambda for Index Snapshot-----------------------###############
+  TakeESSnapshot:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      FunctionName: !Join 
+        - '-'
+        - - techwhisper-take-es-snapshot
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Role: !GetAtt techwhisperroleLambda.Arn
+      Runtime: python3.9
+      Timeout: '900'
+      Code:
+        S3Bucket: !Ref BucketName
+        S3Key: take_snap_code.zip
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref S3Bucket
+          Domain_Endpoint_Url: !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/datalake/esdomain/', !Ref EnvName, '/esdomainendpoint', ':1}}']]
+          Domain_Name: !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/datalake/esdomain/', !Ref EnvName, '/esdomainname', ':1}}']]
+          Environment_Name: !Ref EnvName
+          Region_of_SSM_Parameter: !Sub ${AWS::Region}
+          Role_Arn: !GetAtt techwhisperroleLambda.Arn
+          SNS_ARN: !Ref SNSTopic
+          SSM_Repository_Name: !Ref SSMRepository
+      KmsKeyArn: !Ref S3KMSKey
+      Layers:
+        - !Ref lambdalayers1
+        - !Ref lambdalayers2
+      Tags:
+        - Key: Name
+          Value:  !Join 
+            - '-'
+            - - techwhisper-take-es-snapshot
+              - !Ref EnvName
+              - !FindInMap [region, !Ref AWS::Region, reg]
+        - Key: applicationrole
+          Value: esbackup
+        - Key: createdby
+          Value: abc@techwhisper.in
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/vpcid1/sgidweb', ':1}}']]
+        SubnetIds: 
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/subdb1az1id1', ':1}}']]
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/subdb1az2id1', ':1}}']]
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/subdb1az3id1', ':1}}']]
+  LambdaAsycConfigSnapshot:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties: 
+      DestinationConfig:
+        OnFailure:
+          Destination: !Ref SNSTopic
+        OnSuccess:
+          Destination: !Ref SNSTopic
+      FunctionName: !Ref TakeESSnapshot
+      MaximumRetryAttempts: 1
+      Qualifier: "$LATEST"
+  PermissionESSnapshot:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref TakeESSnapshot
+      Principal: !Ref JAMSTriggerIAM
+#######################--------------------Create Lambda for Index Snapshot-END ------------------------###############
+########### ------------------------Create Lambda for Success/In Progress/ Deletion of Snapshot-------------------------###############
+
+  ESBackupNotification:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      FunctionName: !Join
+        - '-'
+        - - techwhisper-old-snapshot-deletion-notification-es-snapshot
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Role: !GetAtt techwhisperroleLambda.Arn
+      Runtime: python3.9
+      Timeout: '900'
+      Code:
+        S3Bucket: !Ref BucketName
+        S3Key: del_snap_es_notification_code.zip
+      Description: Delete old ES snapshots and Sends notification post ES index snapshot
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref S3Bucket
+          Domain_Endpoint_Url: !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/datalake/esdomain/', !Ref EnvName, '/esdomainendpoint', ':1}}']]
+          Domain_Name: !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/datalake/esdomain/', !Ref EnvName, '/esdomainname', ':1}}']]
+          Environment_Name: !Ref EnvName
+          Region_of_SSM_Parameter: !Sub ${AWS::Region}
+          Role_Arn: !GetAtt techwhisperroleLambda.Arn
+          SNS_ARN: !Ref SNSTopic
+          SSM_Repository_Name: !Ref SSMRepository
+          SSM_Retention_Period: !Ref SSMRetention   
+      KmsKeyArn: !Ref S3KMSKey
+      Layers:
+        - !Ref lambdalayers1
+        - !Ref lambdalayers2
+      Tags:
+        - Key: Name
+          Value:  !Join 
+            - '-'
+            - - techwhisper-old-snapshot-deletion-notification-es-snapshot
+              - !Ref EnvName
+              - !FindInMap [region, !Ref AWS::Region, reg]
+        - Key: applicationrole
+          Value: old-snapshot-deletion-esbackup-notification
+        - Key: createdby
+          Value: abc@techwhisper.in
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/vpcid1/sgidweb', ':1}}']]
+        SubnetIds: 
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/subdb1az1id1', ':1}}']]
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/subdb1az2id1', ':1}}']]
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/subdb1az3id1', ':1}}']]
+  LambdaAsycConfigNotification:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties: 
+      DestinationConfig:
+        OnFailure:
+          Destination: !Ref SNSTopic
+        OnSuccess:
+          Destination: !Ref SNSTopic
+      FunctionName: !Ref ESBackupNotification
+      MaximumRetryAttempts: 1
+      Qualifier: "$LATEST"
+  PermissionESBackupNotification:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ESBackupNotification
+      Principal: !Ref JAMSTriggerIAM
+      
+########### ------------------------Create Lambda for Success/In Progress/ Deletion of Snapshot-END----------------------###############
+
+########### ------------------------Create Lambda for Restore Snapshot-------------------------###############    
+  RestoreESSnapshot:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      FunctionName: !Join 
+        - '-'
+        - - techwhisper
+          - restore-es-snapshot
+          - !Ref EnvName
+          - !FindInMap [region, !Ref AWS::Region, reg]
+      Role: !GetAtt techwhisperroleLambda.Arn
+      Runtime: python3.9
+      Timeout: '900'
+      Code:
+        S3Bucket: !Ref BucketName
+        S3Key: restore_code.zip
+      Environment:
+        Variables:
+          Role_Arn: !GetAtt techwhisperroleLambda.Arn
+          SNS_ARN: !Ref SNSTopic
+      KmsKeyArn: !Ref S3KMSKey
+      Layers:
+        - !Ref lambdalayers1
+        - !Ref lambdalayers2
+      Tags:
+        - Key: Name
+          Value:  !Join 
+            - '-'
+            - - techwhisper
+              - restore-es-snapshot
+              - !Ref EnvName
+              - !FindInMap [region, !Ref AWS::Region, reg]
+        - Key: applicationrole
+          Value: esrestore
+        - Key: createdby
+          Value: abc@techwhisper.in
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/vpcid1/sgidweb', ':1}}']]
+        SubnetIds: 
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/subdb1az1id1', ':1}}']]
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/subdb1az2id1', ':1}}']]
+          - !Join ["", ['{{resolve:ssm:/techwhisper-param/shared/infra/', !Ref EnvName, '/subdb1az3id1', ':1}}']]
+  LambdaAsycConfigRestore:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties: 
+      DestinationConfig:
+        OnFailure:
+          Destination: !Ref SNSTopic
+        OnSuccess:
+          Destination: !Ref SNSTopic
+      FunctionName: !Ref RestoreESSnapshot
+      MaximumRetryAttempts: 1
+      Qualifier: "$LATEST"
+  PermissionRestoreESSnapshot:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref RestoreESSnapshot
+      Principal: !Ref JAMSTriggerIAM

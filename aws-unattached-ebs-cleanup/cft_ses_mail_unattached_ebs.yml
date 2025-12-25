@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Deploys Lambda Function which fetches details of un-attached volumes and Event Rule to trigger this Lambda function on 1st of every month
+Parameters:
+  EnvName:
+    Description: Select the environment for which Lambda to be deployed
+    Type: String
+    MinLength: 6
+    MaxLength: 80
+    AllowedValues:
+      - Production
+      - Non-Production
+    Default: Non-Production
+  EnvReg:
+    Description: Select the region for which Lambda to be deployed
+    Type: String
+    MinLength: 6
+    MaxLength: 80
+    AllowedValues:
+      - ap-south-1
+      - us-east-1
+    Default: ap-south-1
+  BucketName:
+    Description: Object Name
+    Type: String
+    MinLength: 4
+    MaxLength: 80
+    Default: ankit-development-inventory
+  IAMParameter:
+    Description: It contains name of parameter store which stores IAM role ARN with required permissions
+    Type: String
+    MinLength: 4
+    MaxLength: 80
+    Default: /lambda/describe-ami-snapshot-lambda
+  SESFrom:
+    Description: Mail ids of ACN recipients
+    Type: String
+    MinLength: 4
+    MaxLength: 80
+    Default: rest
+  ACNRecipients:
+    Description: Mail ids of ACN recipients
+    Type: String
+    MinLength: 4
+    MaxLength: 80
+    Default: testres
+    
+Mappings:
+  environment:
+    Production:
+      env: >-
+        prod
+      FolderName: >-
+        deleted_ebs_ami_snapshots/production
+      ObjectName: >-
+        fetch_unattached_ebs_prod.zip
+    ap-south-1:
+      reg: >-
+        ap1
+    us-east-2:
+      reg: >-
+        e2
+    Non-Production:
+      env: >-
+        non-prod
+      FolderName: >-
+        deleted_ebs_ami_snapshots/non-production
+      ObjectName: >-
+        fetch_unattached_ebs_non_prod.zip
+
+Resources:
+  EBSVolumeInventory:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      FunctionName: !Join ["-", [ankit-unattached-fetch-ebs-volumes-inventory, !FindInMap [environment,!Ref EnvName, env], lambda, !FindInMap [environment, !Ref AWS::Region, reg]]]
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/Newrolefortagging"
+      Runtime: python3.11
+      Timeout: '900'
+      Code:
+        S3Bucket: !Ref BucketName
+        S3Key: !Join ["/", [!FindInMap [environment,!Ref EnvName, FolderName],!FindInMap [environment,!Ref EnvName, ObjectName]]]
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref BucketName
+          Key_name: !FindInMap [environment,!Ref EnvName, ObjectName]
+          Folder_Name: !FindInMap [environment,!Ref EnvName, FolderName]
+          IAM_Parameter: !Ref IAMParameter
+          SNS_ARN: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:ACN-CloudWatch-alert-notification"
+          SES_From: !Ref SESFrom
+          ACN_Recipients: !Ref ACNRecipients
+      Tags:
+        - Key: Name
+          Value: !Join ["-", [ankit-unattached-fetch-ebs-volumes-inventory, !FindInMap [environment,!Ref EnvName, env], lambda]]
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Owner
+          Value: test
+          
+  LambdaAsycConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties: 
+      DestinationConfig:
+        OnFailure:
+          Destination: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:ACN-CloudWatch-alert-notification"
+        OnSuccess:
+          Destination: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:ACN-CloudWatch-alert-notification"
+
+      FunctionName: !Ref EBSVolumeInventory
+      MaximumRetryAttempts: 1
+      Qualifier: "$LATEST"
+          
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref EBSVolumeInventory
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt Eventschedule.Arn
+      
+  Eventschedule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: !Join ["-", [ankit-trigger-unattached-ebs-volumes-inventory, !FindInMap [environment,!Ref EnvName, env], lambda]]
+      Description: >-
+        A CloudWatch Event Rule that triggers Lambda to fetch un-attached ebs volume details.
+      State: ENABLED
+      ScheduleExpression: cron(0 9 1 * ? *)
+      Targets:
+        - Arn: !GetAtt 
+            - EBSVolumeInventory
+            - Arn
+          Id: TargetFunctionA1

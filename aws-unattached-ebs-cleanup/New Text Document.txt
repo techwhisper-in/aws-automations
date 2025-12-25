@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Deploys Lambda Function which fetches details of Old Snapshots, AMIs and deletes which are older than 14 days for Non-Production and 30 days for Production
+Parameters:
+  EnvName:
+    Description: Select the environment for which Lambda to be deployed
+    Type: String
+    MinLength: 6
+    MaxLength: 80
+    AllowedValues:
+      - Production
+      - Non-Production
+    Default: Non-Production
+
+Conditions:
+  EnvProductionCondition: !Equals
+    - !Ref EnvName
+    - Production
+  EnvNonProductionCondition: !Equals
+    - !Ref EnvName
+    - Non-Production
+
+Resources:
+  LambdaProdFunction:
+    Condition: EnvProductionCondition
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      FunctionName: ankkr-ami-snapshot-delete-inventory-prod-lambda
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/Newrolefortagging"
+      Runtime: python3.10
+      Timeout: '900'
+      Code:
+        S3Bucket: ankit-development-inventory
+        S3Key: deleted_ebs_ami_snapshots/production/fetch_unattached_ebs.zip
+      Environment:
+        Variables:
+          BUCKET_NAME: ankit-development-inventory
+          Key_name: old-ami-snapshot-delete.zip
+          Aging: 30
+          Folder_Name: deleted_ebs_ami_snapshots/production/
+          SNS_ARN: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:ankkr-ami-snapshot-ebs-volume-notification"
+      Tags:
+        - Key: Name
+          Value: ankkr-ami-snapshot-delete-inventory-prod-lambda
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Owner
+          Value: ak@ankit.com
+  LambdaProdAsyncConfig:
+    Condition: EnvProductionCondition
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties: 
+      DestinationConfig:
+        OnFailure:
+          Destination: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:ACN-CloudWatch-alert-notification"
+        OnSuccess:
+          Destination: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:ACN-CloudWatch-alert-notification"
+      FunctionName: !Ref LambdaProdFunction
+      MaximumRetryAttempts: 1
+      Qualifier: "$LATEST"         
+  LambdaProdPermission:
+    Condition: EnvProductionCondition
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaProdFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventProdSchedule.Arn
+  EventProdSchedule:
+    Condition: EnvProductionCondition
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: ankkr-trigger-snapshot-delete-inventory-prod-lambda
+      Description: >-
+        A CloudWatch Event Rule that triggers Lambda to fetch AMI and Snapshot details and delete AMI and Snapshot in Prod environments if older than 30 Days.
+      State: ENABLED
+      ScheduleExpression: cron(0 9 1 * ? *)
+      Targets:
+        - Arn: !GetAtt 
+            - LambdaProdFunction
+            - Arn
+          Id: TargetFunctionProd
+
+
+  LambdaNonProdFunction:
+    Condition: EnvNonProductionCondition
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      FunctionName: ankkr-ami-snapshot-delete-inventory-non-prod-lambda
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/Newrolefortagging"
+      Runtime: python3.10
+      Timeout: '900'
+      Code:
+        S3Bucket: ankit-development-inventory
+        S3Key: deleted_ebs_ami_snapshots/non-production/fetch_unattached_ebs.zip
+      Environment:
+        Variables:
+          BUCKET_NAME: ankit-development-inventory
+          Key_name: old-ami-snapshot-delete.zip
+          Aging: 14
+          Folder_Name: deleted_ebs_ami_snapshots/non-production/
+          SNS_ARN: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:ankkr-ami-snapshot-ebs-volume-notification"
+      Tags:
+        - Key: Name
+          Value: ankkr-ami-snapshot-delete-inventory-non-prod-lambda
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Owner
+          Value: ak@ankit.com
+  LambdaNonProdAsyncConfig:
+    Condition: EnvNonProductionCondition
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties: 
+      DestinationConfig:
+        OnFailure:
+          Destination: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:ACN-CloudWatch-alert-notification"
+        OnSuccess:
+          Destination: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:ACN-CloudWatch-alert-notification"
+      FunctionName: !Ref LambdaNonProdFunction
+      MaximumRetryAttempts: 1
+      Qualifier: "$LATEST"         
+  LambdaNonProdPermission:
+    Condition: EnvNonProductionCondition
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaNonProdFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventNonProdSchedule.Arn
+  EventNonProdSchedule:
+    Condition: EnvNonProductionCondition
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: ankkr-trigger-snapshot-delete-inventory-non-prod-lambda
+      Description: >-
+        A CloudWatch Event Rule that triggers Lambda to fetch AMI and Snapshot details and delete AMI and Snapshot in Non Prod environments if older than 14 Days.
+      State: ENABLED
+      ScheduleExpression: cron(0 9 1 * ? *)
+      Targets:
+        - Arn: !GetAtt 
+            - LambdaNonProdFunction
+            - Arn
+          Id: TargetFunctionNonProd

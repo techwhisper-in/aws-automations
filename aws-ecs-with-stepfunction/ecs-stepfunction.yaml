@@ -1,0 +1,196 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to run ECS tasks sequentially using Step Functions and schedule execution
+
+Resources:
+  # IAM Role for Step Functions
+  StepFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionECSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:RunTask
+                  - ecs:StopTask
+                  - ecs:DescribeTasks
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: "*"
+
+  # ECS Task Definition 1
+  ECSTaskDefinition1:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: MyTaskDefinition1
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: MyContainer1
+          Image: my-image-1
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  # ECS Task Definition 2
+  ECSTaskDefinition2:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: MyTaskDefinition2
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: MyContainer2
+          Image: my-image-2
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  # Step Function State Machine
+  MyStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !GetAtt StepFunctionRole.Arn
+      DefinitionString: !Sub
+        - |-
+          {
+            "Comment": "Run ECS Tasks Sequentially",
+            "StartAt": "RunTask1",
+            "States": {
+              "RunTask1": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::ecs:runTask.sync",
+                "Parameters": {
+                  "Cluster": "${ClusterArn}",
+                  "TaskDefinition": "${TaskDefinition1Arn}",
+                  "LaunchType": "FARGATE",
+                  "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                      "Subnets": ["${SubnetId}"],
+                      "AssignPublicIp": "ENABLED"
+                    }
+                  }
+                },
+                "Next": "RunTask2"
+              },
+              "RunTask2": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::ecs:runTask.sync",
+                "Parameters": {
+                  "Cluster": "${ClusterArn}",
+                  "TaskDefinition": "${TaskDefinition2Arn}",
+                  "LaunchType": "FARGATE",
+                  "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                      "Subnets": ["${SubnetId}"],
+                      "AssignPublicIp": "ENABLED"
+                    }
+                  }
+                },
+                "End": true
+              }
+            }
+          }
+        - ClusterArn: !Ref ECSClusterArn
+          TaskDefinition1Arn: !Ref ECSTaskDefinition1
+          TaskDefinition2Arn: !Ref ECSTaskDefinition2
+          SubnetId: !Ref SubnetId
+
+  # IAM Role for ECS Task Execution
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ECSTaskExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:GetAuthorizationToken
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  # CloudWatch Logs Group
+  CloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/my-task-definitions
+      RetentionInDays: 7
+
+  # EventBridge Rule to Trigger Step Function at a Specific Time
+  ScheduleStepFunctionRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: "cron(0 12 29 1 ? 2025)" # Replace with your desired schedule (UTC time)
+      State: "ENABLED"
+      Targets:
+        - Id: "TriggerStepFunction"
+          Arn: !Ref MyStateMachine
+          RoleArn: !GetAtt EventBridgeInvokeStepFunctionRole.Arn
+
+  # IAM Role for EventBridge to Invoke Step Function
+  EventBridgeInvokeStepFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EventBridgeInvokeStepFunctionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: states:StartExecution
+                Resource: !Ref MyStateMachine
+
+# Outputs
+Outputs:
+  StateMachineArn:
+    Description: ARN of the Step Function State Machine
+    Value: !Ref MyStateMachine
+  EventBridgeRuleArn:
+    Description: ARN of the EventBridge Rule
+    Value: !Ref ScheduleStepFunctionRule

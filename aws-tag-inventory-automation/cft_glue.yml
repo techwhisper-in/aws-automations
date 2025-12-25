@@ -1,0 +1,1151 @@
+Description: "Deploys a Glue Role and glue job that will fetch tag inventory"
+Parameters:
+    EnvName:
+      Description: Select the environment
+      Type: String
+      MaxLength: 41
+      AllowedValues:
+        - dvmon1
+        - dev1
+        - dev2
+        - dev3
+        - dvdp1
+        - dvdp2
+        - dvdp3
+        - dvsa1
+        - dvsa2
+        - dvsa3
+        - acmon1
+        - acpt1
+        - acpt2
+        - acdp1
+        - acdp2
+        - acsa1
+        - acsa2
+        - pvmon1
+        - prev1
+        - pvsa1
+        - pvdp1
+        - tsmon1
+        - test1
+        - test2
+        - tsdp1
+        - tsdp2
+        - tsint1
+        - tssa1
+        - tssa2
+
+Conditions:
+  EnvsourceSelectCondition: !Or
+    - !Equals [!Ref EnvName,dvmon1]
+    - !Equals [!Ref EnvName,acmon1]
+    - !Equals [!Ref EnvName,pvmon1]
+    - !Equals [!Ref EnvName,tsmon1]
+
+  EnvtargetSelectCondition: !Not
+    - !Or
+        - !Equals [!Ref EnvName,dvmon1]
+        - !Equals [!Ref EnvName,acmon1]
+        - !Equals [!Ref EnvName,pvmon1]
+        - !Equals [!Ref EnvName,tsmon1]
+
+
+Mappings:
+  environment:
+    dvmon1:
+      AccountType: >-
+        development
+      BucketName: >-
+        ankit-development-inventory
+      S3putResource: >-
+        arn:aws:s3:::ankit-development-inventory/*
+      KMSARN: >-
+        arn:aws:kms:ap-south-1:387458318877:key/a5891edc-ece3-4615-bb12-4517d64a9991
+      ScriptLocation: >-
+        s3://ankit-development-inventory/Test.py
+      TempDir: >-
+        s3://ankit-development-inventory/Temporary
+      ARNList: >-
+        taginventory-rolelist
+      AccDict: >-
+        account-names
+      ControllerAccName: >-
+        ankitcft-dev-monitoring-01
+    acmon1:
+      AccountType: >-
+        acceptance
+      BucketName: >-
+        ankit-development-inventory
+      SNSARN: >-
+        arn:aws:sns:ap-south-1:387458318877:ACN-CloudWatch-alert-notification
+      KMSARN: >-
+        arn:aws:kms:ap-south-1:387458318877:key/1be3a64d-59fb-43da-8301-72b1c6d4370c
+      ScriptLocation: >-
+        s3://ankit-development-inventory/Test.py
+      TempDir: >-
+        s3://ankit-development-inventory/Temporary
+      ARNList: >-
+        /lambda/ankit-describe-ami-snapshot-lambda
+      AccDict: >-
+        dictionary
+      ControllerAccName: >-
+        ankitcf-dev-monitoring-01
+    pvmon1:
+      AccountType: >-
+        preview
+      BucketName: >-
+        ankit-development-inventory
+      SNSARN: >-
+        arn:aws:sns:ap-south-1:387458318877:ACN-CloudWatch-alert-notification
+      KMSARN: >-
+        arn:aws:kms:ap-south-1:387458318877:key/1be3a64d-59fb-43da-8301-72b1c6d4370c
+      ScriptLocation: >-
+        s3://ankit-development-inventory/Test.py
+      TempDir: >-
+        s3://ankit-development-inventory/Temporary
+      ARNList: >-
+        /lambda/ankit-describe-ami-snapshot-lambda
+      AccDict: >-
+        dictionary
+      ControllerAccName: >-
+        ankitcf-dev-monitoring-01
+    tsmon1:
+      AccountType: >-
+        test
+      BucketName: >-
+        ankit-development-inventory
+      SNSARN: >-
+        arn:aws:sns:ap-south-1:387458318877:ACN-CloudWatch-alert-notification
+      KMSARN: >-
+        arn:aws:kms:ap-south-1:387458318877:key/1be3a64d-59fb-43da-8301-72b1c6d4370c
+      ScriptLocation: >-
+        s3://ankit-development-inventory/Test.py
+      TempDir: >-
+        s3://ankit-development-inventory/Temporary
+      ARNList: >-
+        /lambda/ankit-describe-ami-snapshot-lambda
+      AccDict: >-
+        dictionary
+      ControllerAccName: >-
+        ankitcf-dev-monitoring-01
+
+  region:
+    ap-south-1:
+      reg: >-
+        ap1
+    us-east-2:
+      reg: >-
+        e2
+
+  ControllerId:
+    dvmon1:
+      ControllerAccId: >-
+        387458318877
+    dev1:
+      ControllerAccId: >-
+        387458318877
+    dev2:
+      ControllerAccId: >-
+        387458318877
+    dev3:
+      ControllerAccId: >-
+        387458318877
+    dvdp1:
+      ControllerAccId: >-
+        387458318877
+    dvdp2:
+      ControllerAccId: >-
+        387458318877
+    dvdp3:
+      ControllerAccId: >-
+        387458318877
+    dvsa1:
+      ControllerAccId: >-
+        387458318877
+    dvsa2:
+      ControllerAccId: >-
+        387458318877
+    dvsa3:
+      ControllerAccId: >-
+        387458318877
+    acmon1:
+      ControllerAccId: >-
+        387458318877
+    acpt1:
+      ControllerAccId: >-
+        387458318877
+    acpt2:
+      ControllerAccId: >-
+        387458318877
+    acdp1:
+      ControllerAccId: >-
+        387458318877
+    acdp2:
+      ControllerAccId: >-
+        387458318877
+    acsa1:
+      ControllerAccId: >-
+        387458318877
+    acsa2:
+      ControllerAccId: >-
+        387458318877
+    pvmon1:
+      ControllerAccId: >-
+        387458318877
+    prev1:
+      ControllerAccId: >-
+        387458318877
+    pvsa1:
+      ControllerAccId: >-
+        387458318877
+    pvdp1:
+      ControllerAccId: >-
+        387458318877
+    tsmon1:
+      ControllerAccId: >-
+        387458318877
+    test1:
+      ControllerAccId: >-
+        387458318877
+    test2:
+      ControllerAccId: >-
+        387458318877
+    tsdp1:
+      ControllerAccId: >-
+        387458318877
+    tsdp2:
+      ControllerAccId: >-
+        387458318877
+    tsint1:
+      ControllerAccId: >-
+        387458318877
+    tssa1:
+      ControllerAccId: >-
+        387458318877
+    tssa2:
+      ControllerAccId: >-
+        387458318877
+
+Resources:
+  ankitcftsourcerole:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Role"  
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "sts:AssumeRole"
+            Effect: Allow
+            Principal: 
+              Service: 
+                - glue.amazonaws.com
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+        Version: "2012-10-17"
+      Description: "IAM role for glue to fecth tag inventory"
+      RoleName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-taginventory'
+            - !Ref EnvName
+      Tags: 
+        - 
+          Key: name
+          Value: !Join ["-", ["ankitcft", "glue-taginventory", !Ref EnvName, !FindInMap [region, !Ref AWS::Region, reg]]]
+        - 
+          Key: environment
+          Value: !Ref EnvName
+        - 
+          Key: costcenter
+          Value: "157"
+        - 
+          Key: lob
+          Value: "infra"
+        - 
+          Key: createdby
+          Value: "cloudformation"
+          
+  ankitcfttargetrole:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Role"  
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "sts:AssumeRole"
+            Effect: Allow
+            Principal: 
+              Service: 
+                - glue.amazonaws.com
+              AWS: !Join ["", ["arn:aws:iam::", !FindInMap [ControllerId, !Ref EnvName, ControllerAccId], ":root"]]
+        Version: "2012-10-17"
+      Description: "IAM role for glue to fecth tag inventory"
+      RoleName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-taginventory'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Tags: 
+        - 
+          Key: name
+          Value: !Join ["-", ["ankitcft", "glue-taginventory", !Ref EnvName,!FindInMap [region, !Ref AWS::Region, reg]]]
+        - 
+          Key: environment
+          Value: !Ref EnvName
+        - 
+          Key: costcenter
+          Value: "157"
+        - 
+          Key: lob
+          Value: "infra"
+        - 
+          Key: createdby
+          Value: "cloudformation"
+  CWforgluePolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Sid: AllowCWLogsAccess
+            Action: 
+              - "logs:*"
+            Effect: Allow
+            Resource: !Sub arn:aws:logs:*:${AWS::AccountId}:log-group:*
+            
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-cloudwatchlogsforglue-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcftsourcerole
+
+  eventPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "events:ListTagsForResource"
+              - "events:ListRules"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowEventsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-cloudwatchevent-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcftsourcerole
+
+  gluePolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "glue:GetTags"
+              - "glue:GetJob"
+              - "glue:GetJobs"
+              - "glue:ListTriggers"
+              - "glue:ListTrigger"
+              - "glue:GetCrawlers"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowGlueAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-gluejobs-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcftsourcerole
+
+  s3Policysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement:
+            - Action:
+                - 's3:GetBucketTagging'
+                - 's3:ListAllMyBuckets'
+                - 's3:GetBucketLocation'
+                - 's3:ListBucket'
+                - 's3:GetObject'
+              Effect: Allow
+              Resource: 'arn:aws:s3:::*'
+              Sid: AllowS3Access
+            - Action: 's3:PutObject'
+              Effect: Allow
+              Resource: !FindInMap [environment, !Ref EnvName, S3putResource]
+              Sid: Statement1
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-s3-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcftsourcerole
+
+  dynamodbPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "dynamodb:ListTables"
+              - "dynamodb:ListTagsOfResource"
+              - "dynamodb:DescribeTable"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowDynamoDBAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-dynamodb-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcftsourcerole
+  lambdaPolicySource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "lambda:GetFunction"
+              - "lambda:ListFunctions"
+              - "lambda:ListTags"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowLambdaAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-lambda-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcftsourcerole
+        
+  crossaccountPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties:
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "sts:AssumeRole"
+            Effect: Allow
+            Resource:
+              - "arn:aws:iam::*:role/ankitcft-glue-taginventory*"
+            Sid: AllowCrossAccountAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-crossaccount-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcftsourcerole
+  ssmPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties:
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "ssm:GetParameter"
+            Effect: Allow
+            Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*
+            Sid: AllowSSMAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-ssm-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcftsourcerole
+        
+  snsPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "sns:publish"
+              - "sns:subscription"
+              - "sns:ListTagsForResource"
+              - "sns:ListTopics"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowsnsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-sns-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcftsourcerole
+  sqsPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "sqs:ListQueueTags"
+              - "sqs:ListQueues"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowsqsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-sqs-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcftsourcerole
+  kmsdecryptPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey"
+              - "kms:ListAliases"
+            Effect: Allow
+            Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+            Sid: Allowkmsdecrypt
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-kmsdecrypt-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcftsourcerole
+  cwalarmPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "cloudwatch:ListTagsForResource"
+              - "cloudwatch:DescribeAlarms"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowcwalarmsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-cwalarm-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcftsourcerole
+        
+  rdsPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "rds:ListTagsForResource"
+              - "rds:DescribeDBSnapshots"
+              - "rds:DescribeDBClusterSnapshots"
+              - "rds:DescribeDBInstances"
+              - "rds:DescribeDBClusters"
+            Effect: Allow
+            Resource:
+              - !Sub arn:aws:rds:*:${AWS::AccountId}:snapshot:*
+              - !Sub arn:aws:rds:*:${AWS::AccountId}:cluster:*
+              - !Sub arn:aws:rds:*:${AWS::AccountId}:cluster-snapshot:*
+              - !Sub arn:aws:rds:*:${AWS::AccountId}:db:*
+            Sid: AllowrdsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-rds-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcftsourcerole
+
+
+  esPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "es:DescribeDomains"
+              - "es:DescribeDomain"
+              - "es:ListTags"
+              - "es:ListDomainNames"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowesAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-es-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcftsourcerole
+
+
+  firehosePolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "firehose:ListTagsForDeliveryStream"
+              - "firehose:ListDeliveryStreams"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowfirehoseAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-firehose-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcftsourcerole
+
+  kinesisPolicysource:
+    Condition: EnvsourceSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "kinesis:ListStreams"
+              - "kinesis:ListTagsForStream"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowkinesisAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-kinesis-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcftsourcerole
+
+
+  CWLogsPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties:
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "logs:ListTagsLogGroup"
+              - "logs:DescribeLogGroups"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowCWLogsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-cloudwatchlogs-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcfttargetrole
+        
+  dynamodbPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties:
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "dynamodb:ListTables"
+              - "dynamodb:ListTagsOfResource"
+              - "dynamodb:DescribeTable"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowDynamoDBAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-dynamodb-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcfttargetrole
+        
+  eventPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties:
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "events:ListTagsForResource"
+              - "events:ListRules"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowEventsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-events-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcfttargetrole
+
+  gluePolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "glue:GetTags"
+              - "glue:GetJob"
+              - "glue:GetJobs"
+              - "glue:ListTriggers"
+              - "glue:ListTrigger"
+              - "glue:GetCrawlers"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowGlueAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-gluejobs-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcfttargetrole
+
+  lambdaPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties:
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action:
+              - "lambda:GetFunction"
+              - "lambda:ListFunctions"
+              - "lambda:ListTags"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowLambdaAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-lambda-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles:
+        - !Ref ankitcfttargetrole
+  s3Policytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "s3:GetBucketTagging"
+              - "s3:ListBucket"
+              - "s3:ListAllMyBuckets"
+              - "s3:GetBucketLocation"
+            Effect: Allow
+            Resource: "arn:aws:s3:::*"
+            Sid: AllowS3Access
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-s3-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcfttargetrole
+  snsPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "sns:ListTagsForResource"
+              - "sns:ListTopics"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowsnsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-sns-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcfttargetrole
+  sqsPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "sqs:ListQueueTags"
+              - "sqs:ListQueues"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowsqsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-sqs-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcfttargetrole
+  cwalarmPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "cloudwatch:ListTagsForResource"
+              - "cloudwatch:DescribeAlarms"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowcwalarmsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-cwalarm-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcfttargetrole
+        
+        
+  rdsPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "rds:ListTagsForResource"
+              - "rds:DescribeDBSnapshots"
+              - "rds:DescribeDBClusterSnapshots"
+              - "rds:DescribeDBInstances"
+              - "rds:DescribeDBClusters"
+            Effect: Allow
+            Resource:
+              - !Sub arn:aws:rds:*:${AWS::AccountId}:snapshot:*
+              - !Sub arn:aws:rds:*:${AWS::AccountId}:cluster:*
+              - !Sub arn:aws:rds:*:${AWS::AccountId}:cluster-snapshot:*
+              - !Sub arn:aws:rds:*:${AWS::AccountId}:db:*
+            Sid: AllowrdsAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-rds-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcfttargetrole
+        
+  esPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "es:DescribeDomains"
+              - "es:DescribeDomain"
+              - "es:ListTags"
+              - "es:ListDomainNames"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowesAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-es-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcfttargetrole
+
+
+  firehosePolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "firehose:ListTagsForDeliveryStream"
+              - "firehose:ListDeliveryStreams"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowfirehoseAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-firehose-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcfttargetrole
+
+  kinesisPolicytarget:
+    Condition: EnvtargetSelectCondition
+    Type: "AWS::IAM::Policy"  
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - "kinesis:ListStreams"
+              - "kinesis:ListTagsForStream"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowkinesisAccess
+        Version: 2012-10-17
+      PolicyName:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-kinesis-iampolicy'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Roles: 
+        - !Ref ankitcfttargetrole
+
+
+  createparamforrole:
+    Type: AWS::SSM::Parameter
+    Condition: EnvsourceSelectCondition
+    Properties:
+      DataType: text
+      Description: It stores the ARN of Controller account role and target account role
+      Name: !FindInMap [environment, !Ref EnvName, ARNList]
+      Tier: Standard
+      Type: String
+      Value: !GetAtt ankitcftsourcerole.Arn
+
+  createparamforaccname:
+    Type: AWS::SSM::Parameter
+    Condition: EnvsourceSelectCondition
+    Properties:
+      DataType: text
+      Description: It stores the Account Name and their Ids
+      Name: !FindInMap [environment, !Ref EnvName, AccDict]
+      Tier: Standard
+      Type: String
+      Value: !Join ['', ['{"#', !FindInMap [ControllerId, !Ref EnvName, ControllerAccId], '":"', !FindInMap [environment, !Ref EnvName, ControllerAccName], '"}']]
+
+
+  createsecurityconfiguration:
+    Type: 'AWS::Glue::SecurityConfiguration'
+    Condition: EnvsourceSelectCondition
+    Properties:
+      EncryptionConfiguration:
+        S3Encryptions:
+          - KmsKeyArn: !FindInMap [environment, !Ref EnvName, KMSARN]
+            S3EncryptionMode: SSE-KMS
+      Name:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-security-configuration'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+  creategluejob:
+    Type: 'AWS::Glue::Job'
+    Condition: EnvsourceSelectCondition
+    Properties:
+      Command:
+        Name: pythonshell
+        PythonVersion: 3.9
+        ScriptLocation: !FindInMap [environment, !Ref EnvName, ScriptLocation]
+      DefaultArguments:
+        '--Bucket_Name': !FindInMap [environment, !Ref EnvName, BucketName]
+        '--SNS_ARN': !Join ["", ['arn:aws:sns:', !Ref AWS::Region, ':', !FindInMap [ControllerId, !Ref EnvName, ControllerAccId], ':ankitcft-sns-tags-inventory-', !Ref EnvName, '-', !FindInMap [region, !Ref AWS::Region, reg]]]
+        '--TempDir': !FindInMap [environment, !Ref EnvName, TempDir]
+        'library-set': analytics
+        '--enable-job-insights': 'false'
+        '--job-language': python
+        '--Account_Type': !FindInMap [environment, !Ref EnvName, AccountType]
+        '--IAM_Arn': !Ref ankitcftsourcerole
+        '--ARN_Lists': !Ref createparamforrole
+        '--SSM_Acc_details': !Ref createparamforaccname
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      Description: Glue Job creation
+      MaxCapacity: 0.0625
+      MaxRetries: 0
+      Name:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-pythonshell-taginventory-job'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Role: !Ref ankitcftsourcerole
+      SecurityConfiguration: !Ref createsecurityconfiguration
+      Tags: 
+        'Name': !Join ["-", ["ankitcft", "glue-pythonshell-taginventory-job", !Ref EnvName, !FindInMap [region, !Ref AWS::Region, reg]]]
+        'environment': !Ref EnvName
+        'applicationrole': "monitoring"
+        'application': "shared"
+        'applicationusagetype': "monitoring"
+        'costcenter': "157"
+        'purpose': "taginventory"
+        'lob': "itops"
+        'owner': "msp"
+        'createdby': "mechankit"
+      Timeout: 2880
+  createschedule:
+    Type: 'AWS::Glue::Trigger'
+    Condition: EnvsourceSelectCondition
+    Properties:
+      Actions:
+        - JobName: !Ref creategluejob
+      Description: It schedules the glue job
+      Name:
+        !Join
+          - '-'        
+          - - 'ankitcft'
+            - 'glue-trigger'
+            - !Ref EnvName
+            - !FindInMap [region, !Ref AWS::Region, reg]
+      Schedule: 'cron(30 9 ? * 2#1 *)'
+      StartOnCreation: true
+      Tags: 
+        'Name': !Join ["-", ["ankitcft-glue-trigger", !Ref EnvName, !FindInMap [region, !Ref AWS::Region, reg]]]
+        'environment': !Ref EnvName
+        'applicationrole': "monitoring"
+        'application': "shared"
+        'applicationusagetype': "monitoring"
+        'costcenter': "157"
+        'purpose': "taginventory"
+        'lob': "itops"
+        'owner': "msp"
+        'createdby': "mechankit"
+      Type: SCHEDULED
